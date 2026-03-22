@@ -1,35 +1,43 @@
-import os
-import pandas as pd
+import psycopg2
 
-COLUMNS = [
-    "asset",
-    "symbol",
-    "price",
-    "market_cap",
-    "volume",
-    "timestamp",
-    "price_to_volume",
-    "ma",
-    "volatility",
-    "trend"
-]
+DB_CONFIG = {
+    "host": "127.0.0.1",
+    "database": "crypto_db",
+    "user": "crypto_user",
+    "password": "crypto_pass",
+    "port": 5432
+}
 
-
-def save(df, path="data/crypto_stream.csv"):
-    os.makedirs("data", exist_ok=True)
-
-    if df.empty:
+def save(df):
+    if df is None or df.empty:
         return
 
-    for col in COLUMNS:
-        if col not in df.columns:
-            df[col] = None
+    conn = psycopg2.connect(**DB_CONFIG)
+    cur = conn.cursor()
 
-    df = df[COLUMNS]
+    rows = [
+        (
+            r["asset"],
+            r["symbol"],
+            r["price"],
+            r["market_cap"],
+            r["volume"],
+            r["volatility"],
+            r["ma"],
+            r["trend"],
+            r["timestamp"]
+        )
+        for _, r in df.iterrows()
+    ]
 
-    df.to_csv(
-        path,
-        mode="a",
-        header=not os.path.exists(path),
-        index=False
-    )
+    cur.executemany("""
+        INSERT INTO crypto_prices (
+            asset, symbol, price, market_cap, volume,
+            volatility, moving_avg, trend, timestamp
+        )
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+    """, rows)
+
+    conn.commit()
+    cur.close()
+    conn.close()

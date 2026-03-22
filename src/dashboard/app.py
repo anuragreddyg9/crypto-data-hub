@@ -1,26 +1,30 @@
 import streamlit as st
 import pandas as pd
+import psycopg2
 import time
 
 st.set_page_config(page_title="Crypto Data Hub", layout="wide")
 
-FILE = "data/crypto_stream.csv"
-
+DB_CONFIG = {
+    "host": "127.0.0.1",
+    "database": "crypto_db",
+    "user": "crypto_user",
+    "password": "crypto_pass",
+    "port": 5432
+}
 
 def load_data():
-    try:
-        df = pd.read_csv(FILE)
-        df.columns = [c.strip() for c in df.columns]
+    conn = psycopg2.connect(**DB_CONFIG)
 
-        df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
-        df["price"] = pd.to_numeric(df["price"], errors="coerce")
-        df["volume"] = pd.to_numeric(df["volume"], errors="coerce")
+    df = pd.read_sql("""
+        SELECT *
+        FROM crypto_prices
+        ORDER BY timestamp DESC
+        LIMIT 1000
+    """, conn)
 
-        df = df.dropna(subset=["timestamp", "price", "asset"])
-        return df.sort_values("timestamp")
-
-    except:
-        return pd.DataFrame()
+    conn.close()
+    return df
 
 
 st.title("Crypto Data Hub - Real Time Analytics")
@@ -35,18 +39,14 @@ while True:
 
         if df.empty:
             st.warning("Waiting for streaming data...")
-        else:
 
+        else:
             col1, col2, col3, col4 = st.columns(4)
 
             col1.metric("Assets", df["asset"].nunique())
             col2.metric("Rows", len(df))
             col3.metric("Avg Price", round(df["price"].mean(), 2))
-
-            col4.metric(
-                "Avg Volatility",
-                round(df["volatility"].mean(), 6) if "volatility" in df.columns else 0
-            )
+            col4.metric("Avg Volatility", round(df["volatility"].mean(), 6))
 
             st.subheader("Live Price Trend")
 
@@ -60,14 +60,9 @@ while True:
             st.line_chart(chart)
 
             st.subheader("Volume by Asset")
-
-            if "volume" in df.columns:
-                st.bar_chart(df.groupby("asset")["volume"].mean())
+            st.bar_chart(df.groupby("asset")["volume"].mean())
 
             st.subheader("Volatility by Asset")
-
-            if "volatility" in df.columns:
-                st.bar_chart(df.groupby("asset")["volatility"].mean())
+            st.bar_chart(df.groupby("asset")["volatility"].mean())
 
     time.sleep(5)
-    st.rerun()

@@ -3,32 +3,30 @@ import pandas as pd
 
 from extract.coingecko import fetch_data
 from transform.transform import transform
-from features.features import add_features
 from load.load import save
 
 BUFFER = []
-
+MAX_BUFFER = 200
 
 def run():
-    print("pipeline started")
+    print("🚀 pipeline started")
 
-while True:
-    raw = fetch_data()
-    print("RAW:", raw[:1])
+    while True:
+        raw = fetch_data()
+        rows = transform(raw)
 
-    rows = transform(raw)
-    print("ROWS:", rows[:1])
+        BUFFER.extend(rows)
 
-    BUFFER.extend(rows)
+        if len(BUFFER) > MAX_BUFFER:
+            BUFFER[:] = BUFFER[-MAX_BUFFER:]
 
-    df = pd.DataFrame(BUFFER)
+        df = pd.DataFrame(BUFFER)
 
-    print("DF SHAPE:", df.shape)
-    if not df.empty:
-        df = add_features(df)
-        save(df)
+        if not df.empty:
+            save(df)
 
-    time.sleep(20)
+        time.sleep(15)
+
 
 if __name__ == "__main__":
     run()
